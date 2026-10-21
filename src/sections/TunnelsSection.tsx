@@ -43,9 +43,11 @@ const STATE_META: Record<TunnelState, { label: string; className: string }> = {
 
 // 单条转发的文本描述（搜索/展示共用）
 function forwardText(f: ForwardRule): string {
-  if (f.type === 'dynamic') return `SOCKS ${f.bind ?? '127.0.0.1'}:${f.localPort}`
-  const listen = f.type === 'local' ? f.localPort : f.remoteListenPort
-  return `${f.bind ? `${f.bind}:` : ''}${listen} → ${f.remoteHost}:${f.remotePort}`
+  const base =
+    f.type === 'dynamic'
+      ? `SOCKS ${f.bind ?? '127.0.0.1'}:${f.localPort}`
+      : `${f.bind ? `${f.bind}:` : ''}${f.type === 'local' ? f.localPort : f.remoteListenPort} → ${f.remoteHost}:${f.remotePort}`
+  return f.desc ? `${f.desc} ${base}` : base
 }
 
 function ForwardBadges({ f }: { f: ForwardRule }) {
@@ -141,7 +143,10 @@ function ForwardSelector({
                       />
                     )}
                     <ForwardBadges f={f} />
-                    <span className="font-mono text-xs flex items-center gap-1 min-w-0">
+                    {f.desc && (
+                      <span className="text-xs font-medium shrink-0">{f.desc}</span>
+                    )}
+                    <span className={`font-mono text-xs flex items-center gap-1 min-w-0 ${f.desc ? 'text-muted-foreground' : ''}`}>
                       {f.type === 'dynamic' ? (
                         `${f.bind ?? '127.0.0.1'}:${f.localPort}`
                       ) : (

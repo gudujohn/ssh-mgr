@@ -5,6 +5,7 @@ export interface ForwardRule {
   remoteListenPort?: number
   remoteHost?: string
   remotePort?: number
+  desc?: string
 }
 
 export interface HostEntry {

@@ -21,6 +21,7 @@ Host dev
 Host db-tunnel
     HostName jump.example.com
     User ops
+    # 生产库
     LocalForward 15432 db.internal:5432
     DynamicForward 1080
 # <<< ssh-mgr
@@ -29,6 +30,7 @@ Include conf.d/*.conf
 `)
 fs.writeFileSync(`${SSH_DIR}/conf.d/web.conf`, `Host web-tunnel
     HostName 192.168.1.5
+    # 旧描述
     RemoteForward 9090 localhost:9000
 `)
 
@@ -121,7 +123,7 @@ function call(method, url, body) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null
     // 用真实 Readable 作为 req，raw-body 依赖其内部状态
-    const req = payload ? Readable.from([payload]) : Readable.from([])
+    const req = payload ? Readable.from([Buffer.from(payload)]) : Readable.from([])
     req.method = method
     req.url = url
     req.headers = {
@@ -152,13 +154,28 @@ const tunnels = await call('GET', '/api/tunnels')
 const db = tunnels.body.tunnels?.find((t) => t.alias === 'db-tunnel')
 check('GET /api/tunnels 两条隧道', tunnels.status === 200 && tunnels.body.tunnels.length === 2)
 check('db-tunnel 无进程时 stopped', db?.state.status === 'stopped', JSON.stringify(db?.state?.status))
+check('转发描述从注释解析', db?.forwards?.[0]?.desc === '生产库' && db?.forwards?.[1]?.desc == null, JSON.stringify(db?.forwards?.map((f) => f.desc)))
 
 const add = await call('POST', '/api/tunnels', {
   alias: 'mock-tunnel',
   hostName: '10.9.9.9',
-  forwards: [{ type: 'local', listenPort: 18080, targetHost: 'svc', targetPort: 80 }],
+  forwards: [{ type: 'local', listenPort: 18080, targetHost: 'svc', targetPort: 80, desc: '临时隧道描述' }],
 })
 check('POST /api/tunnels 新增', add.status === 200 && add.body.ok === true)
+
+// 描述写入为转发上方的注释行，并能解析回读
+const cfgAfterAdd = fs.readFileSync('/tmp/ssh-mgr-test/.ssh/config', 'utf8')
+check('描述写入为注释行', /^\s*# 临时隧道描述\n\s*LocalForward 18080 svc:80$/m.test(cfgAfterAdd))
+const hostsAfterAdd = await call('GET', '/api/hosts')
+const mockT = hostsAfterAdd.body.hosts.find((h) => h.alias === 'mock-tunnel')
+check('描述解析回读一致', mockT?.forwards?.[0]?.desc === '临时隧道描述', JSON.stringify(mockT?.forwards?.[0]?.desc))
+
+const badDesc = await call('POST', '/api/tunnels', {
+  alias: 'bad-desc',
+  hostName: 'x',
+  forwards: [{ type: 'local', listenPort: 1, targetHost: 's', targetPort: 2, desc: 'a\nb' }],
+})
+check('描述换行注入被拒', badDesc.status === 400)
 
 const dup = await call('POST', '/api/tunnels', {
   alias: 'mock-tunnel',
@@ -236,21 +253,24 @@ check('空串清除 User 指令', !/^\s*User ops$/m.test(afterClear.split('Host 
 // 隧道转发整体替换（手写隧道块）
 const put2 = await call('PUT', '/api/tunnels/web-tunnel', {
   hostName: '192.168.1.5',
-  forwards: [{ type: 'local', listenPort: 18000, targetHost: 'a.internal', targetPort: 8000 }],
+  forwards: [{ type: 'local', listenPort: 18000, targetHost: 'a.internal', targetPort: 8000, desc: '新描述' }],
 })
 check('PUT /api/tunnels 转发替换', put2.status === 200)
 const webConf = fs.readFileSync('/tmp/ssh-mgr-test/.ssh/conf.d/web.conf', 'utf8')
 check('旧转发已移除', !webConf.includes('RemoteForward'))
 check('新转发已写入（含 Include 文件）', webConf.includes('LocalForward 18000 a.internal:8000'))
+check('旧描述注释已清除', !webConf.includes('旧描述'))
+check('新描述注释已写入', /^\s*# 新描述\n\s*LocalForward 18000/m.test(webConf))
 
 // 托管隧道整段重生成，标记保留
 const put3 = await call('PUT', '/api/tunnels/db-tunnel', {
   hostName: 'jump2.example.com',
   user: 'ops',
-  forwards: [{ type: 'local', listenPort: 15433, targetHost: 'db2.internal', targetPort: 5432 }],
+  forwards: [{ type: 'local', listenPort: 15433, targetHost: 'db2.internal', targetPort: 5432, desc: '主库转发' }],
 })
 check('PUT 托管隧道重生成', put3.status === 200)
 check('标记保留', afterPut2().includes('# >>> ssh-mgr: db-tunnel') && afterPut2().includes('HostName jump2.example.com'))
+check('托管块描述重生成且无旧注释残留', afterPut2().includes('# 主库转发') && !afterPut2().includes('# 生产库'))
 function afterPut2() { return fs.readFileSync(cfgPath, 'utf8') }
 
 // 更新不存在的别名

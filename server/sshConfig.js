@@ -108,6 +108,7 @@ function parseFile(filePath, hosts, visited, errors) {
   const lines = content.split(/\r?\n/)
   let current = null
   let managedDepth = false
+  let prevComment = null
 
   const flush = (endLine) => {
     if (current) {
@@ -122,7 +123,11 @@ function parseFile(filePath, hosts, visited, errors) {
     const trimmed = raw.trim()
 
     const mb = trimmed.match(MANAGED_BEGIN)
-    if (mb) managedDepth = true
+    if (mb) {
+      managedDepth = true
+      prevComment = null // 标记行不作为转发描述
+      return
+    }
     if (MANAGED_END.test(trimmed)) {
       if (current) current.managed = true
       managedDepth = false
@@ -130,7 +135,15 @@ function parseFile(filePath, hosts, visited, errors) {
       return
     }
 
-    if (!trimmed || trimmed.startsWith('#')) return
+    if (!trimmed) {
+      prevComment = null // 空行打断注释与转发指令的关联
+      return
+    }
+    if (trimmed.startsWith('#')) {
+      // 紧邻转发指令上方的注释行 = 该转发的描述
+      prevComment = trimmed.replace(/^#+\s?/, '')
+      return
+    }
 
     const m = trimmed.match(/^(\S+)\s+(.+)$/) || trimmed.match(/^(\S+)=(.*)$/)
     if (!m) return
@@ -169,10 +182,15 @@ function parseFile(filePath, hosts, visited, errors) {
     if (keyword === 'localforward' || keyword === 'remoteforward' || keyword === 'dynamicforward') {
       const kind = keyword === 'localforward' ? 'local' : keyword === 'remoteforward' ? 'remote' : 'dynamic'
       const f = parseForward(kind, value)
-      if (f) current.forwards.push(f)
+      if (f) {
+        if (prevComment) f.desc = prevComment
+        current.forwards.push(f)
+      }
+      prevComment = null
       return
     }
 
+    prevComment = null
     // 记录常用选项（同关键字出现多次时保留首个，符合 ssh 语义）
     if (!(keyword in current.options)) current.options[keyword] = value
   })
@@ -218,6 +236,7 @@ function generateBlockLines({ alias, hostName, user, port, identityFile, proxyJu
   if (proxyJump) lines.push(`    ProxyJump ${proxyJump}`)
   if (proxyCommand) lines.push(`    ProxyCommand ${proxyCommand}`)
   for (const f of forwards) {
+    if (f.desc) lines.push(`    # ${String(f.desc).replace(/[\r\n#]/g, ' ').trim()}`)
     const listen = f.bind ? `${f.bind}:${f.listenPort}` : `${f.listenPort}`
     if (f.type === 'local') lines.push(`    LocalForward ${listen} ${f.targetHost}:${f.targetPort}`)
     else if (f.type === 'remote') lines.push(`    RemoteForward ${listen} ${f.targetHost}:${f.targetPort}`)
@@ -267,7 +286,13 @@ function patchBlockLines(blockLines, fields) {
     }
   }
   if (fields.forwards) {
-    lines = lines.filter((l) => !/^\s*(localforward|remoteforward|dynamicforward)(\s|=)/i.test(l))
+    // 移除转发指令行，以及紧邻其上方的描述注释行（避免重复编辑后残留孤儿注释）
+    const isFwd = (l) => /^\s*(localforward|remoteforward|dynamicforward)(\s|=)/i.test(l)
+    lines = lines.filter((l, idx) => {
+      if (isFwd(l)) return false
+      if (/^\s*#/.test(l) && idx + 1 < lines.length && isFwd(lines[idx + 1])) return false
+      return true
+    })
     const fLines = generateBlockLines({ alias: '__x__', forwards: fields.forwards }, false).slice(1)
     lines.push(...fLines)
   }

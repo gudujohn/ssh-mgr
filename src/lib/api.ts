@@ -55,6 +55,7 @@ export const api = {
       listenPort: number
       targetHost?: string
       targetPort?: number
+      desc?: string
     }[]
   }) => req<{ ok: boolean }>('/api/tunnels', { method: 'POST', body: JSON.stringify(payload) }),
   removeTunnel: (alias: string) =>
@@ -94,6 +95,7 @@ export const api = {
       listenPort: number
       targetHost?: string
       targetPort?: number
+      desc?: string
     }[]
   }) =>
     req<{ ok: boolean }>(`/api/tunnels/${encodeURIComponent(alias)}`, {

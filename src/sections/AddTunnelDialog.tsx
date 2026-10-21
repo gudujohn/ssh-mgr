@@ -27,6 +27,7 @@ interface ForwardDraft {
   listenPort: string
   targetHost: string
   targetPort: string
+  desc: string
 }
 
 const emptyForward = (): ForwardDraft => ({
@@ -35,6 +36,7 @@ const emptyForward = (): ForwardDraft => ({
   listenPort: '',
   targetHost: '',
   targetPort: '',
+  desc: '',
 })
 
 const TYPE_META: Record<ForwardDraft['type'], { name: string; hint: string; listenLabel: string }> = {
@@ -119,6 +121,7 @@ export default function AddTunnelDialog({
               listenPort: String(f.type === 'remote' ? f.remoteListenPort ?? '' : f.localPort ?? ''),
               targetHost: f.remoteHost ?? '',
               targetPort: f.remotePort != null ? String(f.remotePort) : '',
+              desc: f.desc ?? '',
             }))
           : [emptyForward()]
       )
@@ -149,6 +152,7 @@ export default function AddTunnelDialog({
     if (identityFile) lines.push(`    IdentityFile ${identityFile}`)
     if (proxyJump) lines.push(`    ProxyJump ${proxyJump}`)
     for (const f of forwards) {
+      if (f.desc.trim()) lines.push(`    # ${f.desc.trim()}`)
       const listen = f.bind ? `${f.bind}:${f.listenPort || '?'}` : f.listenPort || '?'
       if (f.type === 'local') {
         lines.push(`    LocalForward ${listen} ${f.targetHost || '?'}:${f.targetPort || '?'}`)
@@ -195,6 +199,7 @@ export default function AddTunnelDialog({
       listenPort: Number(f.listenPort),
       targetHost: f.targetHost.trim() || undefined,
       targetPort: f.targetPort.trim() ? Number(f.targetPort) : undefined,
+      desc: f.desc.trim() || undefined,
     }))
     try {
       if (editTarget) {
@@ -321,7 +326,7 @@ export default function AddTunnelDialog({
                     value={f.type}
                     onValueChange={(v) => updateForward(i, { type: v as ForwardDraft['type'] })}
                   >
-                    <SelectTrigger className="w-[170px]">
+                    <SelectTrigger className="w-[170px] shrink-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -330,7 +335,12 @@ export default function AddTunnelDialog({
                       <SelectItem value="dynamic">{TYPE_META.dynamic.name}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground flex-1">{meta.hint}</p>
+                  <Input
+                    className="flex-1"
+                    placeholder="描述（可选）：如 生产库只读 / 测试环境 Redis"
+                    value={f.desc}
+                    onChange={(e) => updateForward(i, { desc: e.target.value })}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
@@ -341,6 +351,7 @@ export default function AddTunnelDialog({
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">{meta.hint}</p>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <Field label="绑定地址">

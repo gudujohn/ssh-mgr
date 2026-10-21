@@ -117,6 +117,7 @@ export function createApp() {
     for (const f of forwards) {
       if (!['local', 'remote', 'dynamic'].includes(f.type)) throw new Error('转发类型必须是 local/remote/dynamic')
       if (f.bind != null && /\s/.test(f.bind)) throw new Error('绑定地址含有非法字符')
+      if (f.desc != null && /[\r\n]/.test(f.desc)) throw new Error('描述不能包含换行')
       if (!Number.isInteger(f.listenPort) || f.listenPort < 1 || f.listenPort > 65535) {
         throw new Error(`监听端口无效: ${f.listenPort}`)
       }
