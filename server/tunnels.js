@@ -69,9 +69,13 @@ export function startTunnel(host, forwardIds = null) {
       reject(new Error(`隧道已在运行 (PID ${existing.pid})`))
       return
     }
-    // 后台形态：从配置还原原始命令（-N + 选中的转发 + BatchMode 免交互）
+    // 后台形态：从配置还原原始命令（-T + 选中的转发 + BatchMode 免交互）。
+    // 不用 -N（JumpServer 等网关在无会话连接上不处理转发请求）。
+    // stdin 用 pipe 且保持挂起不写不关：-T 无 -N 时远端会话从 stdin 读命令，
+    // 挂起可让会话一直存活；若给 /dev/null 会读到 EOF 导致会话退出、隧道中断。
     const argv = buildSshArgv(host, { mode: 'tunnel', background: true, forwardIds })
-    const child = spawn(argv[0], argv.slice(1), { stdio: ['ignore', 'ignore', 'pipe'] })
+    const child = spawn(argv[0], argv.slice(1), { stdio: ['pipe', 'ignore', 'pipe'] })
+    child.stdin.on('error', () => {}) // 进程退出时忽略 EPIPE
     const rec = { pid: child.pid, startedAt: Date.now(), stderr: '' }
     child.stderr.on('data', (d) => {
       rec.stderr = (rec.stderr + d.toString()).slice(-2048)

@@ -376,7 +376,7 @@ export default function TunnelsSection() {
                       <Button
                         size="sm"
                         variant="outline"
-                        title="在系统终端中执行 ssh 会话，适用于需要密码/动态口令交互认证、或不支持 -N 的堡垒机（如部分 JumpServer 版本）；会话保持期间隧道生效"
+                        title="在系统终端中执行同一条 ssh 命令，适用于需要密码/动态口令等交互认证的场景；终端会话保持期间隧道生效"
                         disabled={busy === t.alias || sel.length === 0}
                         onClick={() => startInTerminal(t)}
                       >

@@ -83,7 +83,7 @@ const multiHost = {
 const selCmd = buildSshCommand(multiHost, { mode: 'tunnel', forwardIds: [0, 2] })
 check('按勾选过滤转发', selCmd === 'ssh -T -L 1001:a:80 -D 1080 -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes jump.example.com', selCmd)
 const bgCmd = buildSshCommand(multiHost, { mode: 'tunnel', background: true, forwardIds: [1] })
-check('后台形态 -N + BatchMode', bgCmd.startsWith('ssh -N -L 1002:b:80') && bgCmd.includes('BatchMode=yes'), bgCmd)
+check('后台形态 -T + BatchMode（不用 -N，网关兼容性）', bgCmd.startsWith('ssh -T -L 1002:b:80') && bgCmd.includes('BatchMode=yes') && !bgCmd.includes(' -N '), bgCmd)
 const plainCmd = buildSshCommand({ alias: 'dev', hostName: '10.0.0.10', user: 'ubuntu', identityFile: '~/.ssh/id_ed25519' })
 check('普通连接命令还原', plainCmd === 'ssh -l ubuntu -i ~/.ssh/id_ed25519 10.0.0.10', plainCmd)
 const socksCmd = buildSshCommand({ alias: 's', hostName: '172.16.1.2', user: 'root', proxyCommand: 'nc -X 5 -x 127.0.0.1:1080 %h %p' })
@@ -115,7 +115,7 @@ check('config 会话全量启用', JSON.stringify(activeForwardIds(multiCfg, leg
 check('无进程无启用', activeForwardIds(multiCfg, []).length === 0)
 
 // 3) startTunnel 涉及真实 ssh 进程，本沙箱禁止执行 ssh，无法在此测试；
-//    其逻辑为薄封装（spawn ssh -N + 状态以进程扫描为准），在真实环境中验证。
+//    其逻辑为薄封装（spawn ssh -T + 状态以进程扫描为准），在真实环境中验证。
 
 // 4) Express 路由（mock req/res，不经 socket）
 const app = createApp()

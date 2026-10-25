@@ -2,15 +2,17 @@
 //
 // mode:
 //   'connect' —— 交互登录会话：不带任何转发参数（连跳板机本身，不建隧道）
-//   'tunnel'  —— 隧道会话：-T（终端）或 -N（后台），带转发参数
+//   'tunnel'  —— 隧道会话：统一 -T 带转发参数（不用 -N：JumpServer 等网关
+//               不处理无会话连接的 direct-tcpip 转发，端口虽监听但流量不通）
 // forwardIds:
 //   转发规则的下标数组，仅启用选中的转发；undefined/null = 全部启用
 // background:
-//   仅 mode='tunnel' 有效：true 时用 -N 后台形态 + BatchMode（免交互，密钥/agent 认证）
+//   仅 mode='tunnel' 有效：追加 BatchMode（免交互，密钥/agent 认证）等参数；
+//   调用方需保持子进程 stdin 挂起不关闭，否则远端会话读到 EOF 退出、隧道中断
 
 export function buildSshArgv(host, { mode = 'connect', forwardIds = null, background = false } = {}) {
   const args = ['ssh']
-  if (mode === 'tunnel') args.push(background ? '-N' : '-T')
+  if (mode === 'tunnel') args.push('-T')
   if (host.port) args.push('-p', String(host.port))
   if (host.user) args.push('-l', host.user)
   if (host.identityFile) args.push('-i', host.identityFile)

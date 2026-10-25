@@ -262,7 +262,7 @@ export default function AddTunnelDialog({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
           <Field label="别名" required error={errors.alias}>
             <Input
-              placeholder="例如 db-tunnel（启动命令: ssh -N 别名）"
+              placeholder="例如 db-tunnel（Host 别名，用于识别隧道进程）"
               value={alias}
               disabled={!!editTarget}
               onChange={(e) => {
