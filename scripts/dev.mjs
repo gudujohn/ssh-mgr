@@ -6,6 +6,13 @@ import { fileURLToPath } from 'node:url'
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const viteArgs = process.argv.slice(2)
 
+// 手动在终端运行时才自动打开浏览器；被预览面板等无 TTY 场景拉起时不弹窗。
+// 可用 SSH_MGR_NO_OPEN=1 强制关闭。
+const noOpenFlag = !viteArgs.some((a) => a === '--open' || a.startsWith('--open='))
+if (process.stdout.isTTY && noOpenFlag && process.env.SSH_MGR_NO_OPEN !== '1') {
+  viteArgs.push('--open')
+}
+
 const server = spawn(process.execPath, [path.join(root, 'server', 'index.js')], {
   stdio: 'inherit',
   cwd: root,
